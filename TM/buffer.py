@@ -36,19 +36,50 @@ def main(args):
     save_and_print(args.log_path, f'Hyper-parameters: {args.__dict__}')
 
     ''' organize the real dataset '''
-    images_all = []
-    labels_all = []
-    indices_class = [[] for c in range(num_classes)]
-    save_and_print(args.log_path, "BUILDING DATASET")
-    for i in tqdm(range(len(dst_train))):
-        sample = dst_train[i]
-        images_all.append(torch.unsqueeze(sample[0], dim=0))
-        labels_all.append(class_map[torch.tensor(sample[1]).item()])
+    cache_metadata = {
+        'dataset': args.dataset,
+        'subset': args.subset,
+        'res': args.res,
+        'zca': args.zca,
+    }
+    cache_path = args.dataset_cache
+    if cache_path and os.path.isfile(cache_path):
+        save_and_print(args.log_path, f"Loading tensor dataset cache: {cache_path}")
+        cache = torch.load(cache_path, map_location='cpu', weights_only=False, mmap=True)
+        if cache.get('metadata') != cache_metadata:
+            raise ValueError(
+                f"Dataset cache metadata mismatch: expected {cache_metadata}, "
+                f"found {cache.get('metadata')}"
+            )
+        images_all = cache['images']
+        labels_all = cache['labels']
+        save_and_print(args.log_path, f"Loaded cached tensors: {images_all.shape}, {labels_all.shape}")
+    else:
+        images_all = []
+        labels_all = []
+        save_and_print(args.log_path, "BUILDING DATASET")
+        for i in tqdm(range(len(dst_train))):
+            sample = dst_train[i]
+            images_all.append(torch.unsqueeze(sample[0], dim=0))
+            labels_all.append(class_map[torch.tensor(sample[1]).item()])
+        images_all = torch.cat(images_all, dim=0).to("cpu")
+        labels_all = torch.tensor(labels_all, dtype=torch.long, device="cpu")
 
+        if cache_path:
+            cache_dir = os.path.dirname(os.path.abspath(cache_path))
+            os.makedirs(cache_dir, exist_ok=True)
+            temporary_path = f"{cache_path}.tmp.{os.getpid()}"
+            save_and_print(args.log_path, f"Saving tensor dataset cache: {cache_path}")
+            torch.save(
+                {'metadata': cache_metadata, 'images': images_all, 'labels': labels_all},
+                temporary_path,
+            )
+            os.replace(temporary_path, cache_path)
+            save_and_print(args.log_path, f"Tensor dataset cache saved: {cache_path}")
+
+    indices_class = [[] for c in range(num_classes)]
     for i, lab in tqdm(enumerate(labels_all)):
-        indices_class[lab].append(i)
-    images_all = torch.cat(images_all, dim=0).to("cpu")
-    labels_all = torch.tensor(labels_all, dtype=torch.long, device="cpu")
+        indices_class[int(lab)].append(i)
 
     for c in range(num_classes):
         save_and_print(args.log_path, 'class c = %d: %d real images'%(c, len(indices_class[c])))
@@ -126,6 +157,7 @@ if __name__ == '__main__':
     parser.add_argument('--dsa_strategy', type=str, default='color_crop_cutout_flip_scale_rotate', help='differentiable Siamese augmentation strategy')
     parser.add_argument('--data_path', type=str, default='../data', help='dataset path')
     parser.add_argument('--buffer_path', type=str, default='../buffers', help='buffer path')
+    parser.add_argument('--dataset_cache', type=str, default=None, help='optional preprocessed tensor cache')
     parser.add_argument('--train_epochs', type=int, default=50)
     parser.add_argument('--zca', action='store_true')
     parser.add_argument('--decay', action='store_true')

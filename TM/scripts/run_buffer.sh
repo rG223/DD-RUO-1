@@ -7,9 +7,9 @@ cd ..
 # ============ Configuration ============
 CUDA_ID=0
 DATASET="ImageNet"
-SUBSET="imagenette"
+SUBSET="imagefruit"
 MODEL="ConvNetD5"
-DATA_PATH="/path/to/imagenet"
+DATA_PATH="/ssd/rongye/data/imagenet-1k"
 BUFFER_PATH="./buffers"
 
 TRAIN_EPOCHS=50

@@ -31,6 +31,10 @@ wandb/
 results/
 */results/
 *.png
+TM/buffers/
+TM/buffers_parallel/
+TM/results/
+quantize/results/
 
 # Temporary artifacts
 *.tmp
